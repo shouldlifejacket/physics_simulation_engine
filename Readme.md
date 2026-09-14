@@ -1,395 +1,220 @@
-Physics-Informed AI Benchmarking for Collision Dynamics
+Physics Simulation Engine + ML Benchmark
 
-A small scientific machine learning project that investigates whether neural
-networks can accurately predict collision dynamics while also respecting
-physical constraints such as conservation of momentum.
+A small project where I built a 2D physics simulation, generated collision data
+from it, and then used machine learning models to predict the velocities after
+a collision.
 
-Motivation
+The main thing I wanted to test was whether a normal neural network would learn
+the physics well enough on its own, or whether it could make accurate predictions
+while still breaking a physical rule like conservation of momentum.
 
-Neural networks are powerful function approximators, but predictive accuracy
-does not automatically guarantee that their predictions obey the physical laws
-of the system that generated the data.
+What the project does
 
-This project explores that gap using a custom 2D collision simulator.
+The project has five main parts:
 
-The main question is:
+Generate collision data using a custom 2D physics engine.
 
-Can a conventional neural network predict post-collision velocities accurately
-without explicitly enforcing the underlying physical constraints?
+Check the generated data and the physics calculations.
 
-The project also provides a foundation for comparing an unconstrained neural
-network with a physics-informed training objective.
+Train a few standard ML models as baselines.
 
-Project Overview
+Train a PyTorch MLP to predict the final velocities.
 
-The project contains five main stages:
+Compare the model's predictions with the actual momentum of the system.
 
-Physics simulation — generate synthetic collision data using a custom 2D
-physics engine.
+The current version mainly focuses on the standard MLP. A physics-informed version
+is planned as the next step.
 
-Data validation — verify that the simulator behaves consistently with the
-intended physical assumptions.
-
-ML baselines — compare Linear Regression and Random Forest models.
-
-Neural network — train a PyTorch MLP to predict post-collision velocities.
-
-Physics benchmarking — evaluate predictions not only by velocity error but
-also by their physical consistency.
-
-The intended final extension is a physics-informed MLP that adds a conservation
-of momentum penalty to the ordinary prediction loss.
-
-Project Architecture
-
-                Custom 2D Physics Engine
-                         |
-                         v
-                 Synthetic Collision Data
-                         |
-              +----------+----------+
-              |                     |
-              v                     v
-         Data Validation           EDA
-              |
-              v
-       +------+------+------+
-       |             |      |
-       v             v      v
-    Linear        Random   Standard
-   Regression     Forest     MLP
-                            |
-                            v
-                    Physics Benchmark
-                            |
-                            v
-                 Physics-Informed MLP
-                            |
-                            v
-                   Model Comparison
-
-Repository Structure
+Files
 
 File
 
-Purpose
+What it does
 
 main.py
 
-Generates synthetic collision data using the 2D physics engine
+Runs the physics simulation and generates the dataset
 
 eda.py
 
-Performs basic physical/data validation
+Checks the generated data and momentum calculations
 
 ml_pipeline.py
 
-Preprocessing and classical ML baselines
+Runs the Scikit-learn baseline models
 
 pytorch_model.py
 
-Defines and trains the PyTorch neural network
+Defines and trains the PyTorch MLP
 
 benchmark.py
 
-Evaluates predictions against physical quantities
+Checks the trained model against the momentum calculation
 
 data.csv
 
-Generated collision dataset
+Generated collision data
 
-Physics Engine
+Physics Simulation
 
-The simulator models 2D collisions between objects with variable physical
-parameters.
+The simulator is a simplified 2D physics engine. It generates collisions between
+two objects with different positions, velocities, radii and other parameters.
 
-The generated samples include quantities such as:
+The collision response is calculated from the relative position and velocity of
+the objects.
 
-Object masses
-
-Object radii
-
-Initial positions
-
-Initial velocities
-
-Collision parameters
-
-Coefficient of restitution
-
-Other simulation parameters
-
-The collision response is calculated from the geometry and relative motion of
-the colliding objects.
-
-Mass Assumption
-
-The simulator uses:
+For the 2D objects in this simulation, I use:
 
 mass = pi * radius^2
 
-This is treated as a simplified 2D model in which objects are uniform discs with
-constant areal density, so mass is proportional to area.
+This is a simplified assumption where the objects are treated as uniform 2D discs
+with constant density. It is mainly used to give the simulation objects different
+masses based on their size.
 
-This is a modelling assumption for the simulation rather than a universal
-physical statement about mass.
+The simulator also contains things like gravity and friction. Because of that,
+momentum conservation is only used as a benchmark for cases where the tracked
+system can be treated as isolated.
 
 Dataset
 
-The simulator is used to generate a large synthetic dataset of collision events.
+The simulation is used to generate thousands of collision examples.
 
-The dataset is designed to provide controlled inputs and corresponding
-post-collision velocity targets for supervised learning.
+The inputs contain information about the two objects and their initial state,
+while the targets are their velocities after the collision.
 
-The model can therefore be evaluated against both:
+The idea is to create data where the correct answer is produced by the physics
+simulation instead of manually collecting real-world measurements.
 
-The simulated ground-truth velocities
+ML Models
 
-Physical quantities reconstructed from the predictions
-
-This separation is important because a model can have good prediction error
-while still violating a physical invariant.
-
-Machine Learning Baselines
-
-Two classical models are used as baselines:
+I currently compare three approaches:
 
 Linear Regression
 
-Provides a simple linear reference point.
+Used as a simple baseline to see how much of the collision relationship can be
+approximated with a linear model.
 
 Random Forest
 
-Provides a nonlinear tree-based reference model.
+Used as a nonlinear classical ML baseline.
 
-These baselines help determine whether the collision mapping requires nonlinear
-function approximation and whether the neural network provides an advantage
-over conventional ML methods.
+PyTorch MLP
 
-Neural Network
+A fully connected neural network is used to predict the post-collision velocities.
 
-The baseline neural network is a fully connected MLP implemented using PyTorch.
+The current network is roughly:
 
-Conceptually:
+Input
+  |
+64 neurons
+  |
+ReLU
+  |
+64 neurons
+  |
+ReLU
+  |
+Output
 
-Input Features
-      |
-      v
-   Dense Layer
-      |
-     ReLU
-      |
-      v
-   Dense Layer
-      |
-     ReLU
-      |
-      v
- Output Velocities
+The model is trained using MSE loss.
 
-The model is trained using Mean Squared Error (MSE) between predicted and
-simulated post-collision velocities.
+The input features are standardized before training.
 
-The input features are standardized using a scaler fitted only on the training
-data to avoid data leakage.
+Current Results
 
-Physics Benchmark
+The MLP currently gets a velocity prediction MSE of around:
 
-Prediction accuracy alone is not sufficient for this experiment.
+1.38
 
-For an isolated collision system, total linear momentum should be conserved:
+However, when the predicted velocities are used to calculate the final momentum,
+the error is much larger (around 3000 in the current benchmark).
+
+This is the interesting part of the project.
+
+A model can be reasonably good at predicting the values it was trained on without
+necessarily being forced to obey the physical relationships between those values.
+
+The momentum benchmark is therefore separate from the normal prediction loss.
+
+Momentum Check
+
+For two objects, the total linear momentum is calculated as:
+
+p_x = m1 * v1_x + m2 * v2_x
+p_y = m1 * v1_y + m2 * v2_y
+
+For an isolated collision:
 
 initial momentum ≈ final momentum
 
-For two objects, momentum is evaluated component-wise:
+The benchmark compares the initial momentum with the momentum obtained from the
+model's predicted final velocities.
 
-p_x = m1*v1_x + m2*v2_x
-p_y = m1*v1_y + m2*v2_y
+One improvement I want to make is to report relative momentum error as well as
+absolute error, since the absolute value depends on the scale of the masses and
+velocities in the dataset.
 
-The benchmark compares momentum calculated from the initial conditions with
-momentum calculated using the model's predicted final velocities.
+Planned Physics-Informed Model
 
-This allows the project to measure the difference between:
+The next version will add a physics-based term to the neural network's loss.
 
-Statistical accuracy — how close predicted velocities are to the targets
+The normal model uses something like:
 
-Physical consistency — how closely predictions satisfy the conservation
-constraint
+loss = velocity MSE
 
-Current Result
+The physics-informed version will use:
 
-The baseline MLP achieves a velocity prediction MSE of approximately:
+loss = velocity MSE + lambda * momentum loss
 
-MSE ≈ 1.38
+The goal is to compare the two models and see whether explicitly including the
+momentum constraint reduces the physics error.
 
-However, the current benchmark reports a much larger absolute momentum error.
+I don't want to assume beforehand that the physics-informed model will always be
+better. The point is to measure the difference.
 
-This result is interpreted carefully:
+Planned Experiments
 
-A conventional MLP can achieve useful predictive accuracy without explicitly
-being constrained to preserve the physical invariants of the system.
+Some of the experiments I want to add are:
 
-The magnitude of momentum error should be interpreted relative to the momentum
-scale of the dataset. Future evaluation should therefore report normalized or
-relative momentum error in addition to absolute error.
+Compare standard MLP vs physics-informed MLP
 
-Physics-Informed Extension
+Report MAE as well as MSE
 
-The main planned extension is to train a second model using a physics-aware
-objective.
+Report absolute and relative momentum error
 
-A conventional model minimizes:
+Plot predicted vs actual velocities
 
-L_data = MSE(predicted velocity, true velocity)
+Plot initial vs final momentum
 
-A physics-informed model can use:
+Plot the distribution of momentum errors
 
-L_total = L_data + lambda * L_momentum
+Test the models on data outside the training range
 
-where L_momentum penalizes disagreement between initial and predicted final
-momentum.
+Check how the physics loss affects normal prediction accuracy
 
-This creates a controlled comparison:
+For example, an out-of-distribution test could train the model on one range of
+radii and then test it on a higher range that it did not see during training.
 
-             Standard MLP
-                  |
-                  v
-          Prediction accuracy
-                  |
-                  v
-            Physics error
+Important Limitation
 
+This is a simplified physics simulation, not a full physics engine.
 
-        Physics-Informed MLP
-                  |
-                  v
-       Prediction + physics loss
-                  |
-                  v
-            Physics error
+The results also depend on the assumptions made by the simulator. In particular,
+gravity and friction need to be handled carefully when testing momentum
+conservation because they can introduce external forces.
 
-The purpose is not to assume beforehand that the physics-informed model will be
-better, but to experimentally measure the tradeoff between prediction accuracy
-and physical consistency.
+The purpose of the project is mainly to experiment with the relationship between
+machine learning predictions and known physical constraints.
 
-Evaluation
+Running the Project
 
-The project should report multiple metrics rather than relying on one number.
-
-Prediction Metrics
-
-Mean Squared Error (MSE)
-
-Mean Absolute Error (MAE)
-
-Per-output error
-
-Physics Metrics
-
-Mean absolute momentum error
-
-Median momentum error
-
-Standard deviation
-
-95th percentile error
-
-Relative momentum error
-
-A useful normalized measure is:
-
-relative error =
-|p_predicted - p_true| / (|p_true| + epsilon)
-
-Reporting relative error is important because absolute momentum values depend on
-the scale of the masses and velocities in the dataset.
-
-Generalization Experiments
-
-A future version of the project will test whether the models generalize outside
-their training distribution.
+Install the required Python packages first.
 
 For example:
 
-Training radius: 10–40
-Testing radius: 40–50
+pip install numpy pandas matplotlib scikit-learn torch
 
-Similar experiments can be performed by holding out ranges of:
-
-Mass
-
-Velocity
-
-Radius
-
-Collision parameters
-
-This allows comparison of standard and physics-informed models under
-out-of-distribution conditions.
-
-Important Physics Consideration
-
-Momentum conservation should be evaluated carefully.
-
-The tracked objects form an isolated system only when external forces do not
-transfer momentum to or from the system being measured.
-
-Because the simulator can include effects such as gravity and friction, the
-project should distinguish between:
-
-Isolated collision experiment
-
-Used to test conservation of momentum.
-
-External-force experiment
-
-Used to study how the model predicts dynamics when forces act on the system.
-
-This distinction prevents an incorrect assumption that momentum must always remain
-constant in every simulation configuration.
-
-Visualizations
-
-Recommended plots for the project include:
-
-Initial momentum vs final momentum
-
-Momentum error distribution
-
-True velocity vs predicted velocity
-
-Prediction residual distribution
-
-Prediction error vs mass
-
-Prediction error under different collision conditions
-
-Standard MLP vs physics-informed MLP comparison
-
-These plots make the results easier to interpret and make the project more useful
-as a portfolio/research artifact.
-
-Reproducibility
-
-The project is intended to be reproducible from the source code.
-
-A polished version should document:
-
-Python version
-
-Required packages
-
-Dataset generation command
-
-Training command
-
-Benchmark command
-
-Random seeds
-
-Model hyperparameters
-
-Example workflow:
+Then the general workflow is:
 
 python main.py
 python eda.py
@@ -397,68 +222,11 @@ python ml_pipeline.py
 python pytorch_model.py
 python benchmark.py
 
-Adjust the commands above if the scripts require additional arguments.
+The exact commands may change as more experiments are added.
 
-Limitations
+Tech Used
 
-This project uses a simplified physics simulation rather than a complete
-high-fidelity physics engine.
-
-Important limitations include:
-
-Simplified 2D assumptions
-
-Synthetic rather than real-world data
-
-Limited model architectures
-
-Dependence on the simulator's assumptions
-
-A conventional MLP does not explicitly encode physical laws
-
-Absolute momentum error depends on the scale of the simulated system
-
-These limitations are part of the motivation for investigating physics-informed
-objectives rather than being hidden from the evaluation.
-
-Future Work
-
-Possible extensions include:
-
-Physics-informed loss functions
-
-Out-of-distribution testing
-
-Larger hyperparameter studies
-
-More detailed conservation metrics
-
-Energy conservation analysis
-
-Angular momentum analysis
-
-Additional collision scenarios
-
-Better visualization and experiment tracking
-
-Comparison with other physics-aware architectures
-
-Why This Project?
-
-The goal is not simply to achieve the lowest prediction error.
-
-The project investigates a broader scientific ML question:
-
-Is statistical prediction accuracy enough when the model is expected to
-represent a physical system?
-
-By comparing conventional and physics-constrained learning objectives, the project
-aims to demonstrate the difference between fitting observed data and respecting
-the structure of the underlying system.
-
-Tech Stack
-
-Python 3.x
+Python
 
 PyTorch
 
@@ -470,7 +238,13 @@ Pandas
 
 Matplotlib
 
-Author
+Why I Made This
 
-Built as a second-year AIML project exploring the intersection of classical
-mechanics and deep learning.
+I wanted to try something beyond a normal ML prediction project.
+
+Instead of only asking whether a model gets a low MSE, I wanted to check whether
+the predictions still make sense from a physics point of view.
+
+The project is still a work in progress, and the main thing I want to explore next
+is whether adding the physical constraint directly to the training process makes
+the model more physically consistent.
